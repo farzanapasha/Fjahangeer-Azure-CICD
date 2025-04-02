@@ -1,45 +1,47 @@
+trigger:
+- main  # Trigger the pipeline on push to main branch
+
+pool:
+  vmImage: 'ubuntu-latest'
+
 stages:
-  - stage: Build
-    displayName: 'Build Stage'
-    jobs:
-      - job: Build
-        displayName: 'Install Dependencies'
-        pool:
-          name: 'Fjahangeer1872_pool'
-        steps:
-          - task: NodeTool@0
-            inputs:
-              versionSpec: '18.x'
-            displayName: 'Use Node.js'
+- stage: Build
+  displayName: 'Build the Azure Function App'
+  jobs:
+  - job: Build
+    steps:
+    - task: UseNode@1
+      inputs:
+        version: '18.x'  # Ensure you're using the correct Node.js version
 
-          - script: npm install
-            displayName: 'Install Dependencies'
+    - script: npm install
+      displayName: 'Install dependencies'
 
-  - stage: Test
-    displayName: 'Test Stage'
-    jobs:
-      - job: Test
-        displayName: 'Run Unit Tests'
-        pool:
-          name: 'ksolanki6269_pool'
-        steps:
-          - script: npm test
-            displayName: 'Run Tests with Jest'
+    - script: npm test
+      displayName: 'Run Unit Tests'
 
-  - stage: Deploy
-    displayName: 'Deploy Stage'
-    jobs:
-      - deployment: DeployFunction
-        displayName: 'Deploy to Azure Function App'
-        environment: production
-        pool:
-          name: 'Fjahangeer1872_pool'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - task: AzureFunctionApp@1
-                  inputs:
-                    azureSubscription: 'Fjahangeer1872_lab5' # Ensure this Service Connection exists in Azure DevOps
-                    appName: 'FjahangeerHttpTriggerFunction' # Name of your Azure Function App
-                    package: '$(Build.ArtifactStagingDirectory)' # Path to built files
+    - task: ArchiveFiles@2
+      inputs:
+        rootFolderOrFile: '$(Build.SourcesDirectory)'  # Archive all source files
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/functionapp.zip'
+        replaceExistingArchive: true
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)/functionapp.zip'
+        artifactName: 'drop'
+
+- stage: Deploy
+  displayName: 'Deploy to Azure Function App'
+  jobs:
+  - job: Deploy
+    steps:
+    - task: AzureFunctionApp@2
+      inputs:
+        azureSubscription: 'AzureFunctionServiceConnection'  # Service Connection Name
+        appType: 'functionAppLinux'
+        appName: 'myAzureFunctionApp'  # Replace with your function app name
+        package: '$(Build.ArtifactStagingDirectory)/functionapp.zip'
+        deploymentMethod: 'auto'
